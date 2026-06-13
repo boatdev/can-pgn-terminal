@@ -1,0 +1,20 @@
+services:
+  nmea-terminal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nmea-web-terminal
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      # CAN bus adapter device (slcan interface)
+      - CAN_DEVICE=/dev/ttyACM0
+      - CAN_BITRATE=250000
+      # Device stale detection
+      - DEVICE_TIMEOUT=5
+      - DEVICE_CLEANUP_INTERVAL=3
+    volumes:
+      - /dev:/dev:ro
+    privileged: true
+    restart: unless-stopped
