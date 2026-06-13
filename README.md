@@ -1,10 +1,12 @@
-# NMEA 2000 Web Terminal
+# CAN PGN Terminal
 
-A web-based real-time monitor for NMEA 2000 devices over CAN bus.
+A web-based real-time monitor for CAN bus PGN (Parameter Group Number) messages, primarily targeting marine N2K networks.
+
+> **Disclaimer:** This project is not affiliated with or endorsed by the National Marine Electronics Association (NMEA). "NMEA 2000" is a trademark of NMEA.
 
 ## Features
 
-- **Live NMEA 2000 monitoring** — connects to a CAN bus via slcan interface
+- **Live CAN PGN monitoring** — connects to a CAN bus via slcan interface
 - **Auto-detection** — discovers devices on the bus and shows PGN details
 - **Decoded PGN values** — view parsed field values with units in real time
 - **Raw message log** — inspect raw CAN frames with PGN expansion
@@ -15,8 +17,8 @@ A web-based real-time monitor for NMEA 2000 devices over CAN bus.
 
 ```bash
 # Clone the repository
-git clone git@github.com:boatdev/nmea-web-terminal.git
-cd nmea-web-terminal
+git clone git@github.com:boatdev/can-pgn-terminal.git
+cd can-pgn-terminal
 
 # Start with Docker (CAN device required)
 docker compose up -d
@@ -41,14 +43,14 @@ open http://localhost:8000
 ## Project Structure
 
 ```
-nmea-web-terminal/
+can-pgn-terminal/
 ├── backend/
 │   ├── app/
 │   │   ├── __init__.py
 │   │   ├── config.py         # Environment-based configuration
 │   │   ├── models.py         # Pydantic API models
 │   │   ├── stores.py         # Thread-safe data stores
-│   │   ├── can_listener.py   # CAN bus reader and NMEA decoder
+│   │   ├── can_listener.py   # CAN bus reader and PGN decoder
 │   │   └── main.py           # FastAPI application and routes
 │   ├── server.py             # Entry point
 │   ├── requirements.txt
@@ -78,7 +80,7 @@ nmea-web-terminal/
 
 | Endpoint              | Description                               |
 |-----------------------|-------------------------------------------|
-| `GET /api/devices`    | List detected NMEA 2000 devices           |
+| `GET /api/devices`    | List detected CAN bus devices             |
 | `GET /api/values`     | Latest decoded PGN values per device      |
 | `GET /api/raw-messages` | Raw CAN message buffer (with `?since=`) |
 | `GET /api/history`    | Time-series data for a specific field     |

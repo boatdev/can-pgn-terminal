@@ -1,9 +1,9 @@
 services:
-  nmea-terminal:
+  can-pgn-terminal:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nmea-web-terminal
+    container_name: can-pgn-terminal
     ports:
       - "8000:8000"
     environment:
