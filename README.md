@@ -2,8 +2,6 @@
 
 A web-based real-time monitor for CAN bus PGN (Parameter Group Number) messages, primarily targeting marine N2K networks.
 
-> **Disclaimer:** This project is not affiliated with or endorsed by the National Marine Electronics Association (NMEA). "NMEA 2000" is a trademark of NMEA.
-
 ## Features
 
 - **Live CAN PGN monitoring** — connects to a CAN bus via slcan interface
@@ -117,3 +115,5 @@ npm run dev
 ## License
 
 MIT
+
+> **Disclaimer:** This project is not affiliated with or endorsed by the National Marine Electronics Association (NMEA). "NMEA 2000" is a trademark of NMEA.
