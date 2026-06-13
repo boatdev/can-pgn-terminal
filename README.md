@@ -25,7 +25,20 @@ docker compose up -d
 open http://localhost:8000
 ```
 
-> Tested with **USB2CANFD V1** device.
+## Supported Hardware
+
+This project communicates with the CAN bus via the **SLCAN (Lawicel)** serial protocol — a widely supported ASCII command interface for USB-to-CAN adapters.
+
+The following devices are compatible:
+
+| Device | Status |
+|--------|--------|
+| **USB2CANFD V1** | ✅ Tested |
+| CANtact | ✅ Compatible (SLCAN mode) |
+| Lawicel CANUSB | ✅ Compatible |
+| Any SLCAN-compatible adapter (STM32-based, USB2CAN, etc.) | ✅ Compatible |
+
+The connection uses `interface="slcan"` from the [python-can](https://github.com/hardbyte/python-can) library, which works with any adapter that implements the Lawicel SLCAN command set.
 
 ## Configuration
 
