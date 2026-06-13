@@ -25,6 +25,8 @@ docker compose up -d
 open http://localhost:8000
 ```
 
+> Tested with **USB2CANFD V1** device.
+
 ## Configuration
 
 | Environment Variable   | Default   | Description                                 |
