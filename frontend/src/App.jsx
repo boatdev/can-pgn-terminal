@@ -52,9 +52,9 @@ function RawRow({ msg, idx, formatTime, formatValue, formatUnit }) {
         <tr className="raw-fields-row">
           <td colSpan={7} className="raw-fields-cell">
             <div className="pgn-fields">
-              <div className="pgn-fields-title">Декодированные поля PGN:</div>
+              <div className="pgn-fields-title">Decoded PGN Fields:</div>
               <table className="pgn-fields-table">
-                <thead><tr><th>Поле</th><th>Значение</th><th>Ед. изм.</th></tr></thead>
+                <thead><tr><th>Field</th><th>Value</th><th>Unit</th></tr></thead>
                 <tbody>
                   {isNewFormat
                     ? fields.map((f) => (
@@ -168,15 +168,15 @@ export default function App() {
 
   const formatTime = (ts) => {
     if (!ts) return '—';
-    return new Date(ts * 1000).toLocaleTimeString('ru-RU', { hour12: false });
+    return new Date(ts * 1000).toLocaleTimeString('en-US', { hour12: false });
   };
 
   const elapsed = (ts) => {
     if (!ts) return '—';
     const s = Math.floor(Date.now() / 1000 - ts);
-    if (s < 60) return `${s}с`;
-    if (s < 3600) return `${Math.floor(s / 60)}м`;
-    return `${Math.floor(s / 3600)}ч`;
+    if (s < 60) return `${s}s`;
+    if (s < 3600) return `${Math.floor(s / 60)}m`;
+    return `${Math.floor(s / 3600)}h`;
   };
 
   const handlePauseToggle = () => {
@@ -203,25 +203,25 @@ export default function App() {
         <h1>🛥️ NMEA 2000 Web Terminal</h1>
         <div className="status-bar">
           <span className={`badge ${canConnected ? 'badge-live' : 'badge-disconnected'}`}>
-            {canConnected ? '🔴 Подключено к CAN' : '🔴 CAN не подключён'}
+            {canConnected ? '🔴 CAN Connected' : '🔴 CAN Disconnected'}
           </span>
-          <span className="total">Устройств: {total}</span>
+          <span className="total">Devices: {total}</span>
         </div>
       </header>
 
-      {loading && <div className="loader">Загрузка...</div>}
-      {error && <div className="error">Ошибка соединения с сервером: {error}</div>}
+      {loading && <div className="loader">Loading...</div>}
+      {error && <div className="error">Server connection error: {error}</div>}
 
       {!canConnected && !loading && showDeviceList && (
         <div className="can-error">
-          <h2>⚠️ Устройство не доступно</h2>
-          <p>{canError || 'Подключение к CAN-шине не установлено. Проверьте подключение и настройки.'}</p>
+          <h2>⚠️ Device Unavailable</h2>
+          <p>{canError || 'CAN bus connection is not established. Check connection and settings.'}</p>
         </div>
       )}
 
       {!loading && !error && showDeviceList && (
         <main>
-          {devices.length === 0 && canConnected && <div className="empty">Нет обнаруженных устройств</div>}
+          {devices.length === 0 && canConnected && <div className="empty">No devices detected</div>}
           {devices.length > 0 && (
             <div className="table-wrapper">
               <table className="devices-table">
@@ -229,13 +229,13 @@ export default function App() {
                   <tr>
                     <th>Source ID</th>
                     <th>PGN</th>
-                    <th>Описание</th>
-                    <th>Производитель</th>
-                    <th>Класс</th>
-                    <th>Функция</th>
-                    <th>Сообщений</th>
-                    <th>Обнаружен</th>
-                    <th>Последняя активность</th>
+                    <th>Description</th>
+                    <th>Manufacturer</th>
+                    <th>Class</th>
+                    <th>Function</th>
+                    <th>Messages</th>
+                    <th>First Seen</th>
+                    <th>Last Activity</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -253,7 +253,7 @@ export default function App() {
                       <td>{d.device_function || '—'}</td>
                       <td className="cell-num">{d.message_count}</td>
                       <td>{formatTime(d.first_seen)}</td>
-                      <td>{formatTime(d.last_seen)} <span className="elapsed"> {elapsed(d.last_seen)} назад</span></td>
+                      <td>{formatTime(d.last_seen)} <span className="elapsed"> {elapsed(d.last_seen)} ago</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -267,7 +267,7 @@ export default function App() {
         <>
           <div className="device-detail-bar">
             <button className="tab-btn back-btn" onClick={() => { setSelectedDevice(null); }}>
-              ← Все устройства
+              ← All Devices
             </button>
             <div className="device-detail-info">
               <span className="cell-id">Source {deviceInfo.source_id}</span>
@@ -279,7 +279,7 @@ export default function App() {
                 <><span className="detail-sep">|</span><span>{deviceInfo.manufacturer}</span></>
               )}
               <span className="detail-sep">|</span>
-              <span className="detail-msg-count">{deviceInfo.message_count} сообщ.</span>
+              <span className="detail-msg-count">{deviceInfo.message_count} msgs</span>
             </div>
           </div>
 
@@ -288,14 +288,14 @@ export default function App() {
               className={`tab-btn ${deviceSubTab === 'values' ? 'active' : ''}`}
               onClick={() => setDeviceSubTab('values')}
             >
-              📊 Значения
+              📊 Values
               {deviceValues.length > 0 && <span className="tab-count">{deviceValues.length}</span>}
             </button>
             <button
               className={`tab-btn ${deviceSubTab === 'raw' ? 'active' : ''}`}
               onClick={() => setDeviceSubTab('raw')}
             >
-              📋 Сырые сообщения
+              📋 Raw Messages
               {deviceRaw.length > 0 && <span className="tab-count">{deviceRaw.length}</span>}
             </button>
           </nav>
@@ -304,7 +304,7 @@ export default function App() {
             {deviceSubTab === 'values' && (
               <>
                 {deviceValues.length === 0 && (
-                  <div className="empty">Нет декодированных значений для этого устройства</div>
+                  <div className="empty">No decoded values for this device</div>
                 )}
                 {deviceValues.length > 0 && (
                   <div className="values-grid">
@@ -315,7 +315,7 @@ export default function App() {
                         </div>
                         <div className="value-card-body">
                           <table className="pgn-fields-table">
-                            <thead><tr><th>Параметр</th><th>Значение</th><th>Ед.</th></tr></thead>
+                            <thead><tr><th>Parameter</th><th>Value</th><th>Unit</th></tr></thead>
                             <tbody>
                               {(entry.fields || []).map((f) => (
                                 <tr key={f.key}>
@@ -338,11 +338,11 @@ export default function App() {
               <>
                 <div className="raw-controls">
                   <button className="tab-btn" onClick={handlePauseToggle}>
-                    {rawPaused ? '▶ Возобновить' : '⏸ Пауза'}
+                    {rawPaused ? '▶ Resume' : '⏸ Pause'}
                   </button>
                   <span className="raw-info">
-                    Сообщений от Source {selectedDevice}: {deviceRaw.length}
-                    {rawPaused ? ' | Поток приостановлен' : ' | ▶ Поток активен'}
+                    Messages from Source {selectedDevice}: {deviceRaw.length}
+                    {rawPaused ? ' | Stream Paused' : ' | ▶ Stream Active'}
                   </span>
                 </div>
                 <div className="table-wrapper">
@@ -350,17 +350,17 @@ export default function App() {
                     <thead>
                       <tr>
                         <th>#</th>
-                        <th>Время</th>
+                        <th>Time</th>
                         <th>Source</th>
                         <th>PGN</th>
                         <th>Pri</th>
-                        <th>Описание</th>
+                        <th>Description</th>
                         <th>Raw Data (hex)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {deviceRaw.length === 0 && (
-                        <tr><td colSpan={7} className="empty-cell">Нет данных. Ожидание сообщений...</td></tr>
+                        <tr><td colSpan={7} className="empty-cell">No data. Waiting for messages...</td></tr>
                       )}
                       {[...deviceRaw].reverse().map((m, idx) => (
                         <RawRow key={`${m.timestamp}-${idx}`} msg={m} idx={deviceRaw.length - idx} formatTime={formatTime} formatValue={formatValue} formatUnit={formatUnit} />
