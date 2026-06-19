@@ -6,6 +6,7 @@ raw CAN messages, decoded PGN values, and time-series history.
 """
 
 import logging
+import math
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -24,6 +25,8 @@ from app.config import (
 from app.models import DevicesResponse, RawMessagesResponse
 from app.stores import device_store, history_store, raw_store, value_cache
 
+# Configure logging to show INFO messages from our app
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 log = logging.getLogger(__name__)
 
 

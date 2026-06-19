@@ -381,6 +381,97 @@ body {
   background: rgba(0, 180, 216, 0.08);
 }
 
+/* ---------- PGN table (grouped by source) ---------- */
+
+.pgn-row-clickable {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.pgn-row-clickable:hover {
+  background: rgba(0, 180, 216, 0.08);
+}
+
+/* Visual group separator between different sources */
+.pgn-row-source-start td {
+  border-top: 2px solid var(--accent) !important;
+}
+
+.pgn-row-source-end td {
+  border-bottom: 2px solid rgba(0, 180, 216, 0.25);
+}
+
+/* Source group header label (optional accent on first row source cell) */
+.pgn-table .pgn-row-source-start .cell-id {
+  position: relative;
+}
+
+.pgn-table .pgn-row-source-start .cell-id::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 60%;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+/* ---------- PGN detail page ---------- */
+
+.pgn-detail-main {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.pgn-detail-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.pgn-detail-section-title {
+  padding: 16px 20px;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid var(--border);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.pgn-detail-section .empty {
+  padding: 40px 20px;
+}
+
+.pgn-detail-section .table-wrapper {
+  border: none;
+  border-radius: 0;
+}
+
+.pgn-detail-section .raw-controls {
+  padding: 12px 20px;
+  margin-bottom: 0;
+  background: rgba(0, 0, 0, 0.15);
+  border-bottom: 1px solid var(--border);
+}
+
+.pgn-detail-section .pgn-fields-table {
+  font-size: 14px;
+}
+
+.pgn-detail-section .pgn-fields-table th {
+  padding: 12px 20px;
+  font-size: 12px;
+}
+
+.pgn-detail-section .pgn-fields-table td {
+  padding: 10px 20px;
+}
+
 /* ---------- Device detail bar ---------- */
 
 .device-detail-bar {
@@ -408,6 +499,16 @@ body {
 .detail-sep {
   color: var(--border);
   user-select: none;
+}
+
+.crumb {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+.crumb:hover {
+  opacity: 0.8;
 }
 
 .detail-msg-count {
@@ -489,6 +590,116 @@ body {
 }
 
 /* ---------- Responsive ---------- */
+
+/* ---------- Source grid (Level 1) ---------- */
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.section-subtitle {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.source-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.15s ease;
+}
+
+.source-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.source-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid var(--border);
+}
+
+.source-card-id {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.source-card-mfg {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.source-card-count {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.source-card-body {
+  padding: 12px 20px 16px;
+}
+
+.source-card-pgn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(45, 67, 86, 0.3);
+}
+
+.source-card-pgn:last-of-type {
+  border-bottom: none;
+}
+
+.source-card-pgn .cell-pgn {
+  font-size: 13px;
+  min-width: 56px;
+}
+
+.source-card-desc {
+  font-size: 13px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.source-card-more {
+  font-size: 12px;
+  color: var(--text-dim);
+  padding-top: 8px;
+  font-style: italic;
+}
 
 /* ---------- CAN error ---------- */
 

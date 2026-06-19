@@ -1,31 +1,13 @@
-import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment, useMemo } from 'react';
+import { PGN_NAMES } from './resources';
 
 const API_BASE = '/api';
 const RAW_POLL_INTERVAL = 1000;
 const VALUES_POLL_INTERVAL = 2000;
 const DEV_POLL_INTERVAL = 3000;
 
-// ---- PGN names ----
-const PGN_NAMES = {
-  126992: 'System Time',
-  127245: 'Rudder',
-  127250: 'Vessel Heading',
-  127251: 'Rate of Turn',
-  127488: 'Engine Parameters',
-  127508: 'Battery Status',
-  128259: 'Speed, Water Ref.',
-  128267: 'Water Depth',
-  129025: 'Position',
-  129026: 'COG & SOG',
-  129029: 'GNSS Position',
-  129033: 'Time & Date',
-  129038: 'AIS Position',
-  130306: 'Wind Data',
-  130311: 'Environmental',
-};
-
 // ---- RawRow ----
-function RawRow({ msg, idx, formatTime, formatValue, formatUnit }) {
+function RawRow({ msg, idx, formatTime, formatValue, formatUnit, sourceLabel }) {
   const [expanded, setExpanded] = useState(false);
   const fields = msg.pgn_fields;
   const isNewFormat = Array.isArray(fields);
@@ -39,7 +21,7 @@ function RawRow({ msg, idx, formatTime, formatValue, formatUnit }) {
       >
         <td className="cell-num">{idx}</td>
         <td className="cell-time">{formatTime(msg.timestamp)}</td>
-        <td className="cell-id">{msg.source_id}</td>
+        <td className="cell-id">{sourceLabel(msg.source_id)}</td>
         <td className="cell-pgn">{msg.pgn}</td>
         <td className="cell-num">{msg.priority}</td>
         <td>
@@ -98,8 +80,10 @@ export default function App() {
   const lastRawTs = useRef(null);
 
   // --- navigation ---
-  const [selectedDevice, setSelectedDevice] = useState(null);
-  const [deviceSubTab, setDeviceSubTab] = useState('values');
+  // null = source list, number = viewing PGNs of that source
+  const [selectedSourceId, setSelectedSourceId] = useState(null);
+  // null = no PGN selected, { source_id, pgn, description } = detail view
+  const [selectedPgn, setSelectedPgn] = useState(null);
 
   // ---- fetch ----
   const fetchDevices = useCallback(async () => {
@@ -179,23 +163,154 @@ export default function App() {
     return `${Math.floor(s / 3600)}h`;
   };
 
+  // ---- Build a lookup: source_id → manufacturer name from devices ----
+  const deviceManufacturers = useMemo(() => {
+    const map = {};
+    for (const d of devices) {
+      if (d.manufacturer) {
+        map[d.source_id] = d.manufacturer;
+      }
+    }
+    return map;
+  }, [devices]);
+
+  /** Return human-readable label for a source_id, falling back to "Source N". */
+  const sourceLabel = useCallback(
+    (id) => {
+      const mfg = deviceManufacturers[id];
+      return mfg ? `${mfg} (${id})` : `Source ${id}`;
+    },
+    [deviceManufacturers],
+  );
+
+  // ---- PGN groups: unique (source_id, pgn) pairs from values + rawMessages ----
+  const pgnGroups = useMemo(() => {
+    const seen = new Set();
+    const items = [];
+
+    // Primary: from decoded values
+    for (const v of values) {
+      const key = `${v.source_id}:${v.pgn}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        const rawMatch = rawMessages.find(
+          (m) => m.source_id === v.source_id && m.pgn === v.pgn
+        );
+        items.push({
+          source_id: v.source_id,
+          pgn: v.pgn,
+          description: rawMatch?.description || PGN_NAMES[v.pgn] || '',
+        });
+      }
+    }
+
+    // Supplement: raw messages that don't have decoded values yet
+    for (const m of rawMessages) {
+      const key = `${m.source_id}:${m.pgn}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        items.push({
+          source_id: m.source_id,
+          pgn: m.pgn,
+          description: m.description || PGN_NAMES[m.pgn] || '',
+        });
+      }
+    }
+
+    // Group by source_id and sort
+    const map = {};
+    for (const item of items) {
+      if (!map[item.source_id]) map[item.source_id] = [];
+      map[item.source_id].push(item);
+    }
+    for (const key of Object.keys(map)) {
+      map[key].sort((a, b) => a.pgn - b.pgn);
+    }
+    return Object.entries(map).sort((a, b) => Number(a[0]) - Number(b[0]));
+  }, [rawMessages, values]);
+
+  // ---- Source table: merge devices metadata with PGN counts ----
+  const sourceTable = useMemo(() => {
+    // Build PGN count map from pgnGroups
+    const pgnCount = {};
+    for (const [sourceId, pgns] of pgnGroups) {
+      pgnCount[Number(sourceId)] = pgns.length;
+    }
+
+    // Collect all known source IDs
+    const ids = new Set();
+    for (const d of devices) ids.add(d.source_id);
+    for (const sid of Object.keys(pgnCount)) ids.add(Number(sid));
+
+    const rows = [];
+    for (const id of ids) {
+      const dev = devices.find((d) => d.source_id === id);
+      const count = pgnCount[id] || 0;
+      // Skip sources with no PGNs and no device info
+      if (count === 0 && !dev) continue;
+      rows.push({
+        source_id: id,
+        manufacturer: dev?.manufacturer || '',
+        device_class: dev?.device_class || '',
+        device_function: dev?.device_function || '',
+        pgn_count: count,
+      });
+    }
+    rows.sort((a, b) => a.source_id - b.source_id);
+    return rows;
+  }, [devices, pgnGroups]);
+
+  // ---- Filtered PGNs for selected source ----
+  const filteredPgns = useMemo(() => {
+    if (selectedSourceId === null) return [];
+    const entry = pgnGroups.find(([sid]) => Number(sid) === selectedSourceId);
+    return entry ? entry[1] : [];
+  }, [pgnGroups, selectedSourceId]);
+
+  // ---- Detail data for selected PGN ----
+  const selectedValues = useMemo(() => {
+    if (!selectedPgn) return null;
+    return values.find(
+      (v) => v.source_id === selectedPgn.source_id && v.pgn === selectedPgn.pgn
+    ) || null;
+  }, [values, selectedPgn]);
+
+  const selectedRaw = useMemo(() => {
+    if (!selectedPgn) return [];
+    return rawMessages
+      .filter(
+        (m) =>
+          m.source_id === selectedPgn.source_id && m.pgn === selectedPgn.pgn
+      )
+      .slice(-200);
+  }, [rawMessages, selectedPgn]);
+
+  // ---- Raw pause handler ----
   const handlePauseToggle = () => {
-    if (!rawPaused) { setRawPaused(true); }
-    else { lastRawTs.current = null; setRawMessages([]); setRawPaused(false); }
+    if (!rawPaused) {
+      setRawPaused(true);
+    } else {
+      lastRawTs.current = null;
+      setRawMessages([]);
+      setRawPaused(false);
+    }
   };
 
-  const deviceInfo = devices.find((d) => d.source_id === selectedDevice);
+  // ---- Navigation: go back from PGN detail to source PGN list ----
+  const handleBackToSource = () => {
+    setSelectedPgn(null);
+  };
 
-  const deviceValues = values
-    .filter((v) => v.source_id === selectedDevice)
-    .filter((v) => PGN_NAMES[v.pgn])
-    .sort((a, b) => a.pgn - b.pgn);
+  // ---- Navigation: go back from source PGN list to source selection ----
+  const handleBackToSources = () => {
+    setSelectedSourceId(null);
+    setSelectedPgn(null);
+  };
 
-  const deviceRaw = rawMessages
-    .filter((m) => m.source_id === selectedDevice)
-    .slice(-200);
-
-  const showDeviceList = !selectedDevice;
+  // Determine current view level
+  const showSourceList = selectedSourceId === null && !selectedPgn;
+  const showSourcePgns = selectedSourceId !== null && !selectedPgn;
+  const showPgnDetail = selectedPgn !== null;
 
   return (
     <div className="app">
@@ -203,57 +318,63 @@ export default function App() {
         <h1>🛥️ NMEA 2000 Web Terminal</h1>
         <div className="status-bar">
           <span className={`badge ${canConnected ? 'badge-live' : 'badge-disconnected'}`}>
-            {canConnected ? '🔴 CAN Connected' : '🔴 CAN Disconnected'}
+            {canConnected ? '🟢 CAN Connected' : '🔴 CAN Disconnected'}
           </span>
-          <span className="total">Devices: {total}</span>
+          <span className="total">Sources: {pgnGroups.length} | Devices: {total}</span>
         </div>
       </header>
 
       {loading && <div className="loader">Loading...</div>}
       {error && <div className="error">Server connection error: {error}</div>}
 
-      {!canConnected && !loading && showDeviceList && (
+      {!canConnected && !loading && !showPgnDetail && (
         <div className="can-error">
           <h2>⚠️ Device Unavailable</h2>
           <p>{canError || 'CAN bus connection is not established. Check connection and settings.'}</p>
         </div>
       )}
 
-      {!loading && !error && showDeviceList && (
+      {/* ================================================================
+          LEVEL 1: Source list — select a source to see its PGNs
+          ================================================================ */}
+      {!loading && !error && showSourceList && (
         <main>
-          {devices.length === 0 && canConnected && <div className="empty">No devices detected</div>}
-          {devices.length > 0 && (
+          <div className="section-header">
+            <h2 className="section-title">📡 Sources</h2>
+            <span className="section-subtitle">
+              Select a source to see all its PGNs
+            </span>
+          </div>
+          {sourceTable.length === 0 && canConnected && (
+            <div className="empty">No sources detected. Waiting for CAN messages...</div>
+          )}
+          {sourceTable.length === 0 && !canConnected && (
+            <div className="empty">No sources available.</div>
+          )}
+          {sourceTable.length > 0 && (
             <div className="table-wrapper">
               <table className="devices-table">
                 <thead>
                   <tr>
-                    <th>Source ID</th>
-                    <th>PGN</th>
-                    <th>Description</th>
+                    <th>ID</th>
                     <th>Manufacturer</th>
                     <th>Class</th>
                     <th>Function</th>
-                    <th>Messages</th>
-                    <th>First Seen</th>
-                    <th>Last Activity</th>
+                    <th>PGNs</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {devices.map((d) => (
+                  {sourceTable.map((row) => (
                     <tr
-                      key={d.source_id}
+                      key={row.source_id}
                       className="device-row-clickable"
-                      onClick={() => { setSelectedDevice(d.source_id); setDeviceSubTab('values'); }}
+                      onClick={() => setSelectedSourceId(row.source_id)}
                     >
-                      <td className="cell-id">{d.source_id}</td>
-                      <td className="cell-pgn">{d.pgn}</td>
-                      <td>{d.description}</td>
-                      <td>{d.manufacturer || '—'}</td>
-                      <td>{d.device_class || '—'}</td>
-                      <td>{d.device_function || '—'}</td>
-                      <td className="cell-num">{d.message_count}</td>
-                      <td>{formatTime(d.first_seen)}</td>
-                      <td>{formatTime(d.last_seen)} <span className="elapsed"> {elapsed(d.last_seen)} ago</span></td>
+                      <td className="cell-id">{row.source_id}</td>
+                      <td>{row.manufacturer || '—'}</td>
+                      <td>{row.device_class || '—'}</td>
+                      <td>{row.device_function || '—'}</td>
+                      <td className="cell-num">{row.pgn_count}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -263,113 +384,151 @@ export default function App() {
         </main>
       )}
 
-      {!loading && !error && !showDeviceList && deviceInfo && (
-        <>
+      {/* ================================================================
+          LEVEL 2: PGN list for selected source
+          ================================================================ */}
+      {!loading && !error && showSourcePgns && (
+        <main>
           <div className="device-detail-bar">
-            <button className="tab-btn back-btn" onClick={() => { setSelectedDevice(null); }}>
-              ← All Devices
+            <button className="tab-btn back-btn" onClick={handleBackToSources}>
+              ← All Sources
             </button>
             <div className="device-detail-info">
-              <span className="cell-id">Source {deviceInfo.source_id}</span>
+              <span className="cell-id">{sourceLabel(selectedSourceId)}</span>
               <span className="detail-sep">|</span>
-              <span className="cell-pgn">PGN {deviceInfo.pgn}</span>
-              <span className="detail-sep">|</span>
-              <span>{deviceInfo.description}</span>
-              {deviceInfo.manufacturer && (
-                <><span className="detail-sep">|</span><span>{deviceInfo.manufacturer}</span></>
-              )}
-              <span className="detail-sep">|</span>
-              <span className="detail-msg-count">{deviceInfo.message_count} msgs</span>
+              <span>{filteredPgns.length} PGN{filteredPgns.length !== 1 ? 's' : ''}</span>
             </div>
           </div>
 
-          <nav className="tabs">
-            <button
-              className={`tab-btn ${deviceSubTab === 'values' ? 'active' : ''}`}
-              onClick={() => setDeviceSubTab('values')}
-            >
-              📊 Values
-              {deviceValues.length > 0 && <span className="tab-count">{deviceValues.length}</span>}
-            </button>
-            <button
-              className={`tab-btn ${deviceSubTab === 'raw' ? 'active' : ''}`}
-              onClick={() => setDeviceSubTab('raw')}
-            >
-              📋 Raw Messages
-              {deviceRaw.length > 0 && <span className="tab-count">{deviceRaw.length}</span>}
-            </button>
-          </nav>
+          {filteredPgns.length === 0 ? (
+            <div className="empty">No PGN data for this source. Waiting for messages...</div>
+          ) : (
+            <div className="table-wrapper">
+              <table className="devices-table pgn-table">
+                <thead>
+                  <tr>
+                    <th>PGN</th>
+                    <th>Description</th>
+                    <th>PGN Name</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPgns.map((item) => (
+                    <tr
+                      key={`${item.source_id}:${item.pgn}`}
+                      className="pgn-row-clickable"
+                      onClick={() => setSelectedPgn(item)}
+                    >
+                      <td className="cell-pgn">{item.pgn}</td>
+                      <td>{item.description || '—'}</td>
+                      <td>{PGN_NAMES[item.pgn] || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </main>
+      )}
 
-          <main>
-            {deviceSubTab === 'values' && (
-              <>
-                {deviceValues.length === 0 && (
-                  <div className="empty">No decoded values for this device</div>
-                )}
-                {deviceValues.length > 0 && (
-                  <div className="values-grid">
-                    {deviceValues.map((entry) => (
-                      <div key={entry.pgn} className="value-card">
-                        <div className="value-card-header">
-                          PGN {entry.pgn} — {PGN_NAMES[entry.pgn] || 'Unknown'}
-                        </div>
-                        <div className="value-card-body">
-                          <table className="pgn-fields-table">
-                            <thead><tr><th>Parameter</th><th>Value</th><th>Unit</th></tr></thead>
-                            <tbody>
-                              {(entry.fields || []).map((f) => (
-                                <tr key={f.key}>
-                                  <td className="pgn-field-name">{f.name || f.key}</td>
-                                  <td className="pgn-field-value">{formatValue(f.value, f.unit)}</td>
-                                  <td className="pgn-field-unit">{formatUnit(f.unit)}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+      {/* ================================================================
+          LEVEL 3: PGN Detail (Value + RAW)
+          ================================================================ */}
+      {!loading && !error && showPgnDetail && selectedPgn && (
+        <>
+          <div className="device-detail-bar">
+            <button className="tab-btn back-btn" onClick={handleBackToSources}>
+              ← All Sources
+            </button>
+            <div className="device-detail-info">
+              <span className="crumb" onClick={handleBackToSource}>
+                {sourceLabel(selectedPgn.source_id)}
+              </span>
+              <span className="detail-sep">▸</span>
+              <span className="cell-pgn">PGN {selectedPgn.pgn}</span>
+              <span className="detail-sep">▸</span>
+              <span>{selectedPgn.description || PGN_NAMES[selectedPgn.pgn] || 'Unknown'}</span>
+            </div>
+          </div>
 
-            {deviceSubTab === 'raw' && (
-              <>
-                <div className="raw-controls">
-                  <button className="tab-btn" onClick={handlePauseToggle}>
-                    {rawPaused ? '▶ Resume' : '⏸ Pause'}
-                  </button>
-                  <span className="raw-info">
-                    Messages from Source {selectedDevice}: {deviceRaw.length}
-                    {rawPaused ? ' | Stream Paused' : ' | ▶ Stream Active'}
-                  </span>
-                </div>
+          <main className="pgn-detail-main">
+            {/* ---- Values section ---- */}
+            <section className="pgn-detail-section">
+              <h2 className="pgn-detail-section-title">📊 Value</h2>
+              {!selectedValues || !selectedValues.fields || selectedValues.fields.length === 0 ? (
+                <div className="empty">No decoded values for this PGN</div>
+              ) : (
                 <div className="table-wrapper">
-                  <table className="devices-table raw-table">
+                  <table className="pgn-fields-table">
                     <thead>
                       <tr>
-                        <th>#</th>
-                        <th>Time</th>
-                        <th>Source</th>
-                        <th>PGN</th>
-                        <th>Pri</th>
-                        <th>Description</th>
-                        <th>Raw Data (hex)</th>
+                        <th>Parameter</th>
+                        <th>Value</th>
+                        <th>Unit</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {deviceRaw.length === 0 && (
-                        <tr><td colSpan={7} className="empty-cell">No data. Waiting for messages...</td></tr>
-                      )}
-                      {[...deviceRaw].reverse().map((m, idx) => (
-                        <RawRow key={`${m.timestamp}-${idx}`} msg={m} idx={deviceRaw.length - idx} formatTime={formatTime} formatValue={formatValue} formatUnit={formatUnit} />
+                      {selectedValues.fields.map((f) => (
+                        <tr key={f.key}>
+                          <td className="pgn-field-name">{f.name || f.key}</td>
+                          <td className="pgn-field-value">{formatValue(f.value, f.unit)}</td>
+                          <td className="pgn-field-unit">{formatUnit(f.unit)}</td>
+                        </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              </>
-            )}
+              )}
+            </section>
+
+            {/* ---- RAW section ---- */}
+            <section className="pgn-detail-section">
+              <h2 className="pgn-detail-section-title">📋 Raw Messages</h2>
+              <div className="raw-controls">
+                <button className="tab-btn" onClick={handlePauseToggle}>
+                  {rawPaused ? '▶ Resume' : '⏸ Pause'}
+                </button>
+                <span className="raw-info">
+                  Messages for PGN {selectedPgn.pgn}: {selectedRaw.length}
+                  {rawPaused ? ' | Stream Paused' : ' | ▶ Stream Active'}
+                </span>
+              </div>
+              <div className="table-wrapper">
+                <table className="devices-table raw-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Time</th>
+                      <th>Source</th>
+                      <th>PGN</th>
+                      <th>Pri</th>
+                      <th>Description</th>
+                      <th>Raw Data (hex)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedRaw.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="empty-cell">
+                          No raw messages for this PGN. Waiting for data...
+                        </td>
+                      </tr>
+                    )}
+                    {[...selectedRaw].reverse().map((m, idx) => (
+                      <RawRow
+                        key={`${m.timestamp}-${idx}`}
+                        msg={m}
+                        idx={selectedRaw.length - idx}
+                        formatTime={formatTime}
+                        formatValue={formatValue}
+                        formatUnit={formatUnit}
+                        sourceLabel={sourceLabel}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </main>
         </>
       )}

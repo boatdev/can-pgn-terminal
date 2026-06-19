@@ -49,6 +49,7 @@ class DeviceStore:
                 dev.description = description
                 dev.last_seen = now
                 dev.message_count += 1
+                # Only overwrite metadata if new values are non-empty
                 if manufacturer:
                     dev.manufacturer = manufacturer
                 if device_class:
@@ -67,6 +68,24 @@ class DeviceStore:
                     last_seen=now,
                     message_count=1,
                 )
+
+    def update_metadata(
+        self,
+        source_id: int,
+        manufacturer: str = "",
+        device_class: str = "",
+        device_function: str = "",
+    ) -> None:
+        """Update only metadata fields for an existing device (from PGN 60928)."""
+        with self._lock:
+            if source_id in self._devices:
+                dev = self._devices[source_id]
+                if manufacturer:
+                    dev.manufacturer = manufacturer
+                if device_class:
+                    dev.device_class = device_class
+                if device_function:
+                    dev.device_function = device_function
 
     def list_devices(self) -> list[NMEADevice]:
         """Return all devices, excluding hidden PGNs, sorted by source_id."""
