@@ -4,6 +4,7 @@ CAN bus listener — reads and decodes NMEA 2000 messages in a background thread
 
 import asyncio
 import logging
+import os
 import time
 from typing import Any
 
@@ -231,13 +232,14 @@ def _extract_pgn_fields(decoded: Any) -> list[dict]:
 
 
 RECONNECT_DELAY = 3  # seconds between reconnection attempts
+RECEIVE_TIMEOUT = 1   # seconds to wait for a message before checking device presence
 
 
 def can_listener_loop() -> None:
     """Background thread that reads CAN bus messages and updates stores.
 
     Runs forever, automatically reconnecting when the CAN device becomes
-    available again.
+    available again. Uses recv() with a timeout to detect device disappearance.
     """
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -265,7 +267,17 @@ def can_listener_loop() -> None:
             device_store.can_error = ""
             log.info("CAN bus connected — live mode")
 
-            for msg in bus:
+            while True:
+                # Check if the device file still exists
+                if not os.path.exists(CAN_DEVICE):
+                    log.warning("CAN device %s disappeared, reconnecting...", CAN_DEVICE)
+                    raise ConnectionError(f"Device {CAN_DEVICE} disappeared")
+
+                msg = bus.recv(timeout=RECEIVE_TIMEOUT)
+                if msg is None:
+                    # Timeout — no message, but device is still present
+                    continue
+
                 try:
                     decoded = decoder.decode(msg)
                     source_id = msg.arbitration_id & 0xFF
@@ -317,6 +329,8 @@ def can_listener_loop() -> None:
                         description=description,
                         pgn_fields=pgn_fields,
                     )
+                except ConnectionError:
+                    raise
                 except Exception:
                     log.exception("Error decoding message")
 
