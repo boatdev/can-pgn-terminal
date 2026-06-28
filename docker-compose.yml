@@ -15,6 +15,6 @@ services:
       - DEVICE_TIMEOUT=5
       - DEVICE_CLEANUP_INTERVAL=3
     volumes:
-      - /dev:/dev:ro
+      - /dev:/dev:rw
     privileged: true
     restart: unless-stopped
