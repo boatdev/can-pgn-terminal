@@ -91,12 +91,19 @@ export default function App() {
       const resp = await fetch(`${API_BASE}/devices`);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
+      const connected = data.can_connected ?? false;
       setDevices(data.devices ?? []);
       setTotal(data.total ?? 0);
       setMode(data.mode ?? '—');
-      setCanConnected(data.can_connected ?? false);
+      setCanConnected(connected);
       setCanError(data.can_error ?? '');
       setError(null);
+      // Atomically clear stale data when CAN disconnects
+      if (!connected) {
+        setRawMessages([]);
+        setValues([]);
+        lastRawTs.current = null;
+      }
     } catch (err) {
       setError(err.message);
     } finally {

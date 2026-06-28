@@ -149,6 +149,11 @@ class ValueCache:
         with self._lock:
             return self._cache.get((source_id, pgn))
 
+    def clear(self) -> None:
+        """Remove all cached values."""
+        with self._lock:
+            self._cache.clear()
+
     def get_all(self) -> list[dict]:
         """Return all cached values as a flat list."""
         result: list[dict] = []
@@ -230,6 +235,11 @@ class RawMessageStore:
             self._messages.append(msg)
             while len(self._messages) > self._max_size:
                 self._messages.pop(0)
+
+    def clear(self) -> None:
+        """Remove all stored messages."""
+        with self._lock:
+            self._messages.clear()
 
     def get_messages(self, since: Optional[float] = None) -> list[RawMessage]:
         """Return messages, optionally filtered by minimum timestamp."""

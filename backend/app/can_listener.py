@@ -339,6 +339,9 @@ def can_listener_loop() -> None:
             log.warning(err_msg)
             device_store.can_connected = False
             device_store.can_error = err_msg
+            # Clear stale data so the frontend shows correct state
+            value_cache.clear()
+            raw_store.clear()
         finally:
             if bus is not None:
                 try:
