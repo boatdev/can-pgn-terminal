@@ -4,6 +4,7 @@ CAN bus listener — reads and decodes NMEA 2000 messages in a background thread
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 from app.config import CAN_BITRATE, CAN_DEVICE
@@ -229,10 +230,14 @@ def _extract_pgn_fields(decoded: Any) -> list[dict]:
     return enriched
 
 
+RECONNECT_DELAY = 3  # seconds between reconnection attempts
+
+
 def can_listener_loop() -> None:
     """Background thread that reads CAN bus messages and updates stores.
 
-    Runs forever. If the CAN device is unavailable, sets error flags and exits.
+    Runs forever, automatically reconnecting when the CAN device becomes
+    available again.
     """
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -244,77 +249,88 @@ def can_listener_loop() -> None:
         device_store.can_error = msg
         return
 
-    try:
-        import can  # type: ignore[import-untyped]  # pylint: disable=import-error  # noqa: I001
-        from nmea2000 import NMEA2000Decoder  # type: ignore[import-untyped]  # pylint: disable=import-error  # noqa: I001
+    while True:
+        bus = None
+        try:
+            import can  # type: ignore[import-untyped]  # pylint: disable=import-error  # noqa: I001
+            from nmea2000 import NMEA2000Decoder  # type: ignore[import-untyped]  # pylint: disable=import-error  # noqa: I001
 
-        log.info(
-            "Connecting to CAN bus: interface=slcan, channel=%s, bitrate=%d",
-            CAN_DEVICE, CAN_BITRATE,
-        )
-        bus = can.interface.Bus(interface="slcan", channel=CAN_DEVICE, bitrate=CAN_BITRATE)
-        decoder = NMEA2000Decoder()
-        device_store.can_connected = True
-        device_store.can_error = ""
-        log.info("CAN bus connected — live mode")
+            log.info(
+                "Connecting to CAN bus: interface=slcan, channel=%s, bitrate=%d",
+                CAN_DEVICE, CAN_BITRATE,
+            )
+            bus = can.interface.Bus(interface="slcan", channel=CAN_DEVICE, bitrate=CAN_BITRATE)
+            decoder = NMEA2000Decoder()
+            device_store.can_connected = True
+            device_store.can_error = ""
+            log.info("CAN bus connected — live mode")
 
-        for msg in bus:
-            try:
-                decoded = decoder.decode(msg)
-                source_id = msg.arbitration_id & 0xFF
-                pgn = decoded.PGN if hasattr(decoded, "PGN") else 0
+            for msg in bus:
+                try:
+                    decoded = decoder.decode(msg)
+                    source_id = msg.arbitration_id & 0xFF
+                    pgn = decoded.PGN if hasattr(decoded, "PGN") else 0
 
-                # Log ALL PGNs with their decoded attributes and field values for debugging
-                decoded_attrs = [a for a in dir(decoded) if not a.startswith("_")]
-                if hasattr(decoded, "fields"):
-                    field_summary = {f.id: (f.value, f.raw_value if hasattr(f, "raw_value") else None) for f in decoded.fields}
-                else:
-                    field_summary = {}
-                log.info("PGN %d from src=%d, attrs=%s, fields=%s", pgn, source_id, decoded_attrs, field_summary)
+                    # Log ALL PGNs with their decoded attributes and field values for debugging
+                    decoded_attrs = [a for a in dir(decoded) if not a.startswith("_")]
+                    if hasattr(decoded, "fields"):
+                        field_summary = {f.id: (f.value, f.raw_value if hasattr(f, "raw_value") else None) for f in decoded.fields}
+                    else:
+                        field_summary = {}
+                    log.info("PGN %d from src=%d, attrs=%s, fields=%s", pgn, source_id, decoded_attrs, field_summary)
 
-                if pgn == 60928:
-                    meta = _extract_pgn60928_metadata(decoded)
-                    log.info("PGN 60928 metadata: %s", meta)
-                    if meta:
-                        device_store.upsert(
-                            source_id=source_id,
-                            pgn=pgn,
-                            description="ISO Address Claim",
-                            manufacturer=meta.get("manufacturer", ""),
-                            device_class=meta.get("device_class", ""),
-                            device_function=meta.get("device_function", ""),
-                        )
-                    continue
+                    if pgn == 60928:
+                        meta = _extract_pgn60928_metadata(decoded)
+                        log.info("PGN 60928 metadata: %s", meta)
+                        if meta:
+                            device_store.upsert(
+                                source_id=source_id,
+                                pgn=pgn,
+                                description="ISO Address Claim",
+                                manufacturer=meta.get("manufacturer", ""),
+                                device_class=meta.get("device_class", ""),
+                                device_function=meta.get("device_function", ""),
+                            )
+                        continue
 
-                description = decoded.description if hasattr(decoded, "description") else ""
-                manufacturer, device_class, device_function = _describe_device_from_pgn(decoded)
+                    description = decoded.description if hasattr(decoded, "description") else ""
+                    manufacturer, device_class, device_function = _describe_device_from_pgn(decoded)
 
-                device_store.upsert(
-                    source_id, pgn, description, manufacturer, device_class, device_function,
-                )
+                    device_store.upsert(
+                        source_id, pgn, description, manufacturer, device_class, device_function,
+                    )
 
-                priority = (msg.arbitration_id >> 26) & 0x7
-                raw_data = " ".join(f"{b:02X}" for b in msg.data)
-                pgn_fields = _extract_pgn_fields(decoded) if decoded else []
+                    priority = (msg.arbitration_id >> 26) & 0x7
+                    raw_data = " ".join(f"{b:02X}" for b in msg.data)
+                    pgn_fields = _extract_pgn_fields(decoded) if decoded else []
 
-                if pgn_fields:
-                    value_cache.set(source_id, pgn, pgn_fields)
-                    history_store.add(source_id, pgn, pgn_fields)
+                    if pgn_fields:
+                        value_cache.set(source_id, pgn, pgn_fields)
+                        history_store.add(source_id, pgn, pgn_fields)
 
-                raw_store.add(
-                    timestamp=msg.timestamp,
-                    source_id=source_id,
-                    pgn=pgn,
-                    priority=priority,
-                    raw_data=raw_data,
-                    description=description,
-                    pgn_fields=pgn_fields,
-                )
-            except Exception:
-                log.exception("Error decoding message")
+                    raw_store.add(
+                        timestamp=msg.timestamp,
+                        source_id=source_id,
+                        pgn=pgn,
+                        priority=priority,
+                        raw_data=raw_data,
+                        description=description,
+                        pgn_fields=pgn_fields,
+                    )
+                except Exception:
+                    log.exception("Error decoding message")
 
-    except Exception as e:
-        err_msg = f"CAN bus unavailable: {e}"
-        log.warning(err_msg)
-        device_store.can_connected = False
-        device_store.can_error = err_msg
+        except Exception as e:
+            err_msg = f"CAN bus unavailable: {e}"
+            log.warning(err_msg)
+            device_store.can_connected = False
+            device_store.can_error = err_msg
+        finally:
+            if bus is not None:
+                try:
+                    bus.shutdown()
+                except Exception:
+                    pass
+
+        log.info("Retrying connection in %ds...", RECONNECT_DELAY)
+        time.sleep(RECONNECT_DELAY)
