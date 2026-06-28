@@ -327,7 +327,7 @@ export default function App() {
       {loading && <div className="loader">Loading...</div>}
       {error && <div className="error">Server connection error: {error}</div>}
 
-      {!canConnected && !loading && !showPgnDetail && (
+      {!canConnected && !loading && (
         <div className="can-error">
           <h2>⚠️ Device Unavailable</h2>
           <p>{canError || 'CAN bus connection is not established. Check connection and settings.'}</p>
@@ -337,7 +337,7 @@ export default function App() {
       {/* ================================================================
           LEVEL 1: Source list — select a source to see its PGNs
           ================================================================ */}
-      {!loading && !error && showSourceList && (
+      {!loading && !error && canConnected && showSourceList && (
         <main>
           <div className="section-header">
             <h2 className="section-title">📡 Sources</h2>
@@ -387,7 +387,7 @@ export default function App() {
       {/* ================================================================
           LEVEL 2: PGN list for selected source
           ================================================================ */}
-      {!loading && !error && showSourcePgns && (
+      {!loading && !error && canConnected && showSourcePgns && (
         <main>
           <div className="device-detail-bar">
             <button className="tab-btn back-btn" onClick={handleBackToSources}>
@@ -434,7 +434,7 @@ export default function App() {
       {/* ================================================================
           LEVEL 3: PGN Detail (Value + RAW)
           ================================================================ */}
-      {!loading && !error && showPgnDetail && selectedPgn && (
+      {!loading && !error && canConnected && showPgnDetail && selectedPgn && (
         <>
           <div className="device-detail-bar">
             <button className="tab-btn back-btn" onClick={handleBackToSources}>
