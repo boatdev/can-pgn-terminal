@@ -10,6 +10,8 @@ A web-based real-time monitor for CAN bus PGN (Parameter Group Number) messages,
 - **Raw message log** — inspect raw CAN frames with PGN expansion
 - **Time-series history** — track field values over time (heading, wind, etc.)
 - **Device cleanup** — devices are automatically removed from the registry when they disappear from the bus
+- **Auto-reconnect** — automatically reconnects when CAN device is plugged back in
+- **Disconnected state** — data tables are hidden when CAN is disconnected, showing a clear status message
 
 ## Quick Start
 
